@@ -35,7 +35,6 @@ var (
 		{"x86_64-linux-autoconf", "http://lab.llvm.org:8011/builders/sanitizer-x86_64-linux-autoconf"},
 		{"ppc64be-linux", "http://lab.llvm.org:8011/builders/sanitizer-ppc64be-linux"},
 		{"ppc64le-linux", "http://lab.llvm.org:8011/builders/clang-ppc64le-linux-lnt"},
-		{"x86_64-linux-gn", "http://lab.llvm.org:8011/builders/sanitizer-x86_64-linux-gn"},
 		{"LibFuzzer (x86_64-linux)", ""},
 		{"sanitizer", "http://lab.llvm.org:8011/builders/sanitizer-x86_64-linux-fuzzer"},
 		{"chromium-asan", "https://ci.chromium.org/p/chromium/builders/luci.chromium.ci/Libfuzzer%20Upload%20Linux%20ASan/"},
@@ -129,15 +128,13 @@ func GetStatus(buildUrl string) (statusLine, error) {
 						if i == 0 {
 							// Does this look like the right table?
 							h := findSubtag(c, "th")
-							if h != nil && h.FirstChild != nil && strings.Contains(h.FirstChild.Data, "Time") {
-								h2 := h.NextSibling
-								if h2 != nil {
-									h2 = h2.NextSibling
-								}
-								if h2 != nil && h2.FirstChild != nil && strings.Contains(h2.FirstChild.Data, "Duration") {
+							if h != nil && h.FirstChild != nil {
+								if h.FirstChild.Data == "Time" {
+									continue
+								} else if h.FirstChild.Data == "Create time" {
 									isLuci = true
+									continue
 								}
-								continue
 							}
 							return *new(statusLine)
 						}
@@ -147,7 +144,7 @@ func GetStatus(buildUrl string) (statusLine, error) {
 						var rev int64 = 0
 
 						for i, c := range findSubtags(c, "td") {
-							if i == 0 && lastbuild.IsZero() {
+							if ((!isLuci && i == 0) || (isLuci && i == 1)) && lastbuild.IsZero() {
 								// LUCI has slightly different layout/formatting than buildbot
 								if c.FirstChild.Data == "span" {
 									strtime, err := strconv.ParseInt(attr(c.FirstChild, "data-timestamp"), 10, 64)
@@ -168,20 +165,19 @@ func GetStatus(buildUrl string) (statusLine, error) {
 									}
 								}
 							}
-							if (!isLuci && i == 1) || (isLuci && i == 2) {
+							if (!isLuci && i == 1) || (isLuci && i == 3) {
 								rev, _ = strconv.ParseInt(c.FirstChild.Data, 10, 0)
 							}
-							if (!isLuci && i == 2) || (isLuci && i == 3) {
+							if (!isLuci && i == 2) || (isLuci && i == 4) {
 								classC := class(c)
-								if classC == "success" || classC == "status-Success" {
+								if strings.Contains(strings.ToLower(classC), "success") {
 									success = 1
 								}
-								if classC == "failure" || classC == "status-Failure" {
+								if strings.Contains(strings.ToLower(classC), "failure") {
 									success = -1
 								}
-
 							}
-							if (!isLuci && i == 3) || (isLuci && i == 4) {
+							if (!isLuci && i == 3) || (isLuci && i == 5) {
 								relUrl, err := url.Parse(attr(findSubtag(c, "a"), "href"))
 								if err == nil {
 									buildUrl = baseUrl.ResolveReference(relUrl).String()
